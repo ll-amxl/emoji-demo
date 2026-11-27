@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emoji 互动展馆 · 演示版</title>
+<style>
+* { box-sizing: border-box; }
+:root { color-scheme: dark; font: 16px/1.5 system-ui, "Microsoft YaHei", sans-serif; }
+body { margin: 0; color: #edf3f5; background: #101518; }
+main { max-width: 1600px; margin: auto; padding: clamp(10px, 2.5vw, 36px); }
+header, .bar, li { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 { font-size: clamp(24px, 5vw, 40px); margin: 0 0 12px; }
+h2 { font-size: 18px; margin: 0; }
+button { font: inherit; cursor: pointer; border: 0; border-radius: 8px; }
+#camera { background: #a8f5cd; color: #10251e; padding: 10px 16px; font-weight: 700; flex: none; }
+button:disabled { opacity: .65; cursor: wait; }
+.panel { background: #1a2227; border: 1px solid #334148; border-radius: 14px; padding: 16px; }
+.bar { margin-bottom: 12px; }
+label, .note, #status, #placeholder { color: #bac8ce; }
+input { accent-color: #a8f5cd; }
+.stage { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: #0b1013; aspect-ratio: 16 / 9; }
+video { opacity: 0; pointer-events: none; }
+video, canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage.mirror video, .stage.mirror canvas { transform: scaleX(-1); }
+#placeholder { position: relative; text-align: center; padding: 24px; }
+#status { margin: 12px 0 0; min-height: 24px; }
+ul { list-style: none; padding: 0; margin: 12px 0; }
+li { border-bottom: 1px solid #334148; }
+li button { background: transparent; color: inherit; padding: 10px 0; }
+li button[aria-pressed="false"] { opacity: .55; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+.state, .note { font-size: 14px; color: #bac8ce; }
+.note { margin-bottom: 0; }
+
+
+.mode { display: block; margin-top: 12px; }
+
+li[hidden] { display: none; }
+
+
+li { flex-wrap: wrap; gap: 6px; }
+li .replace { padding: 4px 8px; background: #334148; font-size: 14px; }
+.image-feedback { flex-basis: 100%; font-size: 14px; color: #a8f5cd; }
+.image-feedback:empty { display: none; }
+
+.twemoji-picker { position: fixed; inset: auto; box-sizing: border-box; margin: 0; padding: 8px; width: 228px; max-width: calc(100vw - 16px); max-height: min(52vh, 360px); overflow: auto; border: 1px solid #52636a; border-radius: 10px; background: #1a2227; color: inherit; box-shadow: 0 8px 24px #0007; }
+.twemoji-picker:popover-open { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.twemoji-picker button { display: grid; justify-items: center; gap: 4px; background: #252f35; padding: 5px 2px; font-size: 13px; }
+.twemoji-picker button[aria-pressed="true"] { outline: 1px solid #a8f5cd; }
+.twemoji-picker button[aria-pressed="false"] { opacity: 1; }
+.twemoji-picker img { width: 28px; height: 28px; }
+.note a { color: #a8f5cd; }
+
+#snapshot { padding: 8px 12px; margin-top: 8px; }
+#snapshot-download { color: #a8f5cd; }
+#snapshot-preview { width: 100%; border-radius: 8px; }
+
+.camera-area { position: relative; }
+.settings { position: absolute; z-index: 1; top: 10px; right: 10px; width: min(300px, calc(100% - 20px)); }
+.settings summary { width: max-content; margin-left: auto; padding: 8px 12px; border: 1px solid #52636a; border-radius: 8px; background: #1a2227; cursor: pointer; }
+.settings-body { max-height: min(60vh, 540px); overflow: auto; margin-top: 6px; padding: 14px; border: 1px solid #52636a; border-radius: 10px; background: #1a2227; box-shadow: 0 8px 24px #0007; }
+.settings-body h2 { margin-top: 12px; }
+#placeholder { padding: 42px 16px 16px; }
+
+#capture-guide { position: absolute; z-index: 1; pointer-events: none; border: 2px dashed #20343e; box-shadow: 0 0 0 100vmax #182b3433; }
+#capture-guide span { display: block; width: max-content; margin: 10px auto 0; padding: 4px 12px; border-radius: 8px; background: #17242a; color: white; font-weight: 700; }
+.settings { z-index: 2; }
+
+#snapshot-dialog { width: min(840px, calc(100% - 24px)); max-height: calc(100dvh - 24px); padding: clamp(12px, 3vw, 24px); color: inherit; background: #1a2227; border: 1px solid #52636a; border-radius: 14px; }
+#snapshot-dialog::backdrop { background: #0b1013b8; }
+#snapshot-dialog h2 { margin-bottom: 12px; }
+#snapshot-preview { display: block; max-height: 60vh; object-fit: contain; background: #fff; margin-bottom: 12px; }
+#snapshot-dialog .bar { flex-wrap: wrap; }
+.snapshot-actions { display: flex; justify-content: flex-end; gap: 12px; }
+.snapshot-actions button, #choose-output, #snapshot-download { padding: 8px 14px; border-radius: 8px; }
+#snapshot-download { color: #10251e; background: #a8f5cd; text-decoration: none; font-weight: 700; }
+
+.snapshot-actions { flex-wrap: wrap; }
+#profile-view { width: min(100%, 640px); }
+#profile-back { padding: 8px 14px; margin-bottom: 16px; }
+.profile-card { padding: clamp(16px, 5vw, 32px); }
+.profile-card h1 { font-size: clamp(24px, 5vw, 32px); }
+.profile-photo { width: min(100%, 320px); margin: 0 auto 20px; background: white; border-radius: 12px; overflow: hidden; }
+.profile-photo img { display: block; width: 100%; }
+#profile-form { display: grid; gap: 8px; }
+#profile-form label { color: inherit; font-weight: 600; }
+#profile-form label span { color: #bac8ce; font-weight: 400; }
+#profile-form input, #profile-form textarea { width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid #52636a; border-radius: 8px; background: #101518; color: inherit; font: inherit; }
+#profile-form textarea { resize: vertical; }
+#profile-form button { justify-self: end; padding: 8px 16px; background: #a8f5cd; color: #10251e; font-weight: 700; }
+#profile-status { margin: 0; color: #a8f5cd; }
+
+#gallery-view button { padding: 8px 14px; }
+#gallery-rows { display: grid; gap: 12px; margin-top: 12px; }
+.gallery-row { overflow: auto hidden; border-radius: 12px; background: #1a2227; }
+.gallery-track { display: flex; gap: 12px; width: max-content; min-width: 100%; padding: 8px; }
+.gallery-card { width: clamp(130px, 20vw, 250px); flex: none; background: #fff; color: #17242a; font-weight: 600; }
+.gallery-card img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: contain; }
+.gallery-card span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#gallery-detail { width: min(600px, calc(100% - 24px)); border: 1px solid #52636a; border-radius: 14px; overflow-wrap: anywhere; }
+#gallery-detail::backdrop { background: #0b1013b8; }
+#gallery-image { display: block; width: 100%; background: white; margin-bottom: 12px; }
+#gallery-bio { white-space: pre-wrap; }
+
+
+.camera-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+#camera-back { padding: 8px 12px; }
+#gallery-take-photo { background: #a8f5cd; color: #10251e; font-weight: 700; }
+
+.profile-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+#profile-save { background: #334148; color: #edf3f5; }
+#profile-publish-note { margin: 0; font-size: 14px; color: #bac8ce; }
+</style>
+</head>
+<body>
+<main id="camera-view" hidden>
+<header><h1>人体姿态追踪</h1><div class="camera-nav"><button id="camera-back" type="button">返回照片墙</button><button id="camera">开启摄像头</button></div></header>
+<section class="panel">
+<div class="bar"><span>摄像头预览 · 1920 × 1080</span></div><div class="camera-area">
+<div class="stage">
+<video id="video" muted playsinline></video><canvas id="overlay" width="1920" height="1080" aria-hidden="true"></canvas>
+<div id="capture-guide" hidden aria-hidden="true"><span></span></div>
+<div id="placeholder">开启摄像头后，让头部和双手都进入画面</div>
+</div>
+<details class="settings"><summary>参数调整</summary><div class="settings-body"><label><input id="mirror" type="checkbox" checked> 镜像</label><h2>身体部件</h2><label class="mode"><input id="emoji" type="checkbox" checked> Emoji 替换</label><label class="mode">头部摆动灵敏度 <output id="tilt-value">100%</output><br><input id="tilt" type="range" min="0" max="200" step="10" value="100"></label><ul id="parts"></ul><p class="note">点击部件可切换显示。视频画面在浏览器内处理。</p><p class="note">图像由 Twitter 和 Twemoji 贡献者提供。<a href="https://github.com/jdecked/twemoji">Twemoji</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a></p></div></details>
+</div>
+<p id="status" role="status">摄像头未开启</p>
+<div class="bar"><button id="snapshot" type="button" disabled>拍摄快照</button><span id="countdown" role="status"></span></div>
+<dialog id="snapshot-dialog" aria-labelledby="snapshot-title"><h2 id="snapshot-title">快照预览</h2><img id="snapshot-preview" alt="白底 Emoji 快照"><div class="bar"><button id="choose-output" type="button">选择输出文件夹</button><span id="output-status" role="status"></span></div>
+<div class="snapshot-actions"><button id="snapshot-cancel" type="button">取消</button><button id="profile-open" type="button">继续填写</button><a id="snapshot-download" download="twemoji-snapshot.png">保存 PNG</a></div></dialog>
+</section>
+
+</main>
+<main id="profile-view" hidden>
+  <button id="profile-back" type="button">返回拍摄</button>
+  <section class="profile-card panel" aria-labelledby="profile-title">
+    <h1 id="profile-title" tabindex="-1">编辑个人资料</h1>
+    <div class="profile-photo"><img id="profile-image" alt="刚拍摄的 Emoji 照片"></div>
+    <form id="profile-form">
+      <label for="profile-name">昵称</label>
+      <input id="profile-name" name="nickname" maxlength="24" placeholder="输入你的昵称" required>
+      <label for="profile-bio">个人简介 <span>选填</span></label>
+      <textarea id="profile-bio" name="bio" maxlength="160" rows="4" placeholder="简单介绍一下自己"></textarea>
+      <div class="profile-actions">
+  <button type="submit" id="profile-save">仅保存资料</button>
+</div>
+<p id="profile-publish-note">资料仅保存在当前浏览器。<a href="https://emoji-exhibit-online-v1.spiritedkookaburra8.chatgpt.site/">前往完整版投稿</a></p>
+      <p id="profile-status" role="status"></p>
+    </form>
+  </section>
+</main>
+<main id="gallery-view">
+  <header><h1 tabindex="-1" id="gallery-title">示例照片墙</h1><button type="button" id="gallery-take-photo">去拍照</button></header>
+  <p id="gallery-status">试试摄像头换装，再把作品保存为 PNG。<a href="https://emoji-exhibit-online-v1.spiritedkookaburra8.chatgpt.site/">打开完整版</a></p>
+  <button type="button" id="gallery-motion" hidden>暂停滚动</button>
+  <div id="gallery-rows"></div>
+  <dialog id="gallery-detail" aria-labelledby="gallery-name">
+    <img id="gallery-image" alt="">
+    <h2 id="gallery-name"></h2>
+    <p id="gallery-bio"></p>
+    <form method="dialog"><button>关闭</button></form>
+  </dialog>
+</main>
+<script type="module">
+const parts = [
+  { id: 'head', label: '头部', color: '#ffcc70', indices: [7, 8, 0], edges: [[7, 0], [0, 8]] },
+  { id: 'torso', label: '躯干', color: '#a8f5cd', indices: [11, 12, 23, 24], edges: [[11, 12], [12, 24], [24, 23], [23, 11]] },
+  { id: 'leftArm', label: '左臂', color: '#8bcfff', indices: [11, 13, 15], edges: [[11, 13], [13, 15]] },
+  { id: 'rightArm', label: '右臂', color: '#c5a5ff', indices: [12, 14, 16], edges: [[12, 14], [14, 16]] },
+  { id: 'leftLeg', label: '左腿', color: '#ff9f9f', indices: [23, 25, 27], edges: [[23, 25], [25, 27]] },
+  { id: 'rightLeg', label: '右腿', color: '#f3a5dd', indices: [24, 26, 28], edges: [[24, 26], [26, 28]] },
+]
+
+function getBodyParts(landmarks = [], width = 1, height = 1) {
+  return Object.fromEntries(parts.map(({ id, indices, edges }) => {
+    const points = {}
+    for (const index of indices) {
+      const point = landmarks[index]
+      if (point && point.visibility >= 0.55 && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1) {
+        points[index] = { x: point.x * width, y: point.y * height }
+      }
+    }
+    const segments = edges.flatMap(([from, to]) => {
+      const start = points[from]
+      const end = points[to]
+      if (!start || !end) return []
+      const dx = end.x - start.x
+      const dy = end.y - start.y
+      return [{ start, end, length: Math.hypot(dx, dy), angle: Math.atan2(dy, dx) }]
+    })
+    return [id, { points, segments, tracked: indices.every(index => points[index]) }]
+  }))
+}
+
+
+const video = document.querySelector('#video')
+const canvas = document.querySelector('#overlay')
+const context = canvas.getContext('2d')
+const camera = document.querySelector('#camera')
+const mirror = document.querySelector('#mirror')
+const emoji = document.querySelector('#emoji')
+const tilt = document.querySelector('#tilt')
+const tiltValue = document.querySelector('#tilt-value')
+tilt.oninput = () => { tiltValue.textContent = tilt.value + '%' }
+
+function headTilt(points) {
+  const left = points[7]
+  const right = points[8]
+  if (!left || !right || Math.hypot(left.x - right.x, left.y - right.y) < 8) return 0
+  // Measure the ear line from screen left to right to avoid a 180-degree flip.
+  const [start, end] = left.x <= right.x ? [left, right] : [right, left]
+  const angle = Math.atan2(end.y - start.y, end.x - start.x)
+  return Math.max(-Math.PI / 3, Math.min(Math.PI / 3, angle * tilt.valueAsNumber / 100))
+}
+const heads = [
+  ['1f916', '机器人'],
+  ['1f600', '开心'],
+  ['1f602', '笑哭'],
+  ['1f609', '眨眼'],
+  ['1f60d', '爱心眼'],
+  ['1f618', '飞吻'],
+  ['1f61c', '吐舌'],
+  ['1f60e', '墨镜'],
+  ['1f913', '书呆子'],
+  ['1f929', '星星眼'],
+  ['1f914', '思考'],
+  ['1f928', '挑眉'],
+  ['1f62e', '惊讶'],
+  ['1f633', '脸红'],
+  ['1f92b', '嘘'],
+  ['1f612', '不屑'],
+  ['1f644', '翻白眼'],
+  ['1f97a', '委屈'],
+  ['1f622', '流泪'],
+  ['1f62d', '大哭'],
+  ['1f620', '生气'],
+  ['1f624', '气鼓鼓'],
+  ['1f634', '睡着了'],
+  ['1f971', '打哈欠'],
+  ['1f974', '晕乎乎'],
+  ['1f431', '猫咪'],
+  ['1f43c', '熊猫'],
+  ['1f47d', '外星人'],
+  ['1f383', '南瓜灯'],
+  ['1f47b', '幽灵'],
+]
+const tops = [
+  ['1f455', 'T 恤'], ['1f9e5', '外套'], ['1f454', '衬衫领带'], ['1f9ba', '安全背心'], ['1f9e3', '围巾'],
+  ['1f3bd', '运动背心'], ['1f458', '和服'], ['1f457', '连衣裙'], ['1f9b8', '超级英雄'], ['1f392', '双肩包'],
+]
+const hands = [
+  ['1f9e4', '手套'], ['1f44b', '挥手'], ['270c', '胜利手势'], ['1f44d', '点赞'], ['1f44a', '拳头'], ['1f31f', '闪亮星星'],
+  ['1f44c', 'OK 手势'], ['1faf0', '比心'], ['1f932', '捧手'], ['1f339', '玫瑰'],
+]
+const stickers = {
+  head: { options: heads, color: '#334155' },
+  torso: { options: tops, color: '#164e63' },
+  leftArm: { options: hands, color: '#14532d' },
+  rightArm: { options: hands, color: '#581c87' },
+}
+const twemojiBase = 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.0/assets/svg/'
+const stage = document.querySelector('.stage')
+const status = document.querySelector('#status')
+const placeholder = document.querySelector('#placeholder')
+const list = document.querySelector('#parts')
+const randomOutfit = document.createElement('button')
+randomOutfit.type = 'button'
+randomOutfit.textContent = '随机搭配'
+list.before(randomOutfit)
+const controls = new Map()
+const selectedImages = new Map()
+const stickerMotion = new Map()
+const stickerLayers = ['torso', 'head', 'leftArm', 'rightArm']
+let model
+let handModel
+let stream
+let frame
+let previousTime = -1
+const snapshot = document.querySelector('#snapshot')
+const countdown = document.querySelector('#countdown')
+const captureGuide = document.querySelector('#capture-guide')
+const guideCountdown = captureGuide.querySelector('span')
+const captureRegion = { x: 160, y: 90, width: 1600, height: 900 }
+captureGuide.style.inset = `${captureRegion.y / canvas.height * 100}% ${captureRegion.x / canvas.width * 100}%`
+const preview = document.querySelector('#snapshot-preview')
+const snapshotDialog = document.querySelector('#snapshot-dialog')
+document.querySelector('#snapshot-cancel').onclick = () => snapshotDialog.close()
+snapshotDialog.addEventListener('close', () => snapshot.focus())
+const download = document.querySelector('#snapshot-download')
+let captureAt = 0
+let snapshotUrl
+let snapshotBlob
+let outputDirectory
+const chooseOutput = document.querySelector('#choose-output')
+const outputStatus = document.querySelector('#output-status')
+const cameraView = document.querySelector('#camera-view')
+const profileView = document.querySelector('#profile-view')
+const profileImage = document.querySelector('#profile-image')
+const profileForm = document.querySelector('#profile-form')
+const profileStatus = document.querySelector('#profile-status')
+const nickname = document.querySelector('#profile-name')
+const bio = document.querySelector('#profile-bio')
+
+document.querySelector('#profile-open').onclick = () => {
+  if (!snapshotUrl) return
+  snapshotDialog.close()
+  profileImage.src = snapshotUrl
+  cameraView.hidden = true
+  profileView.hidden = false
+  document.querySelector('#profile-title').focus()
+}
+
+randomOutfit.onclick = async () => {
+  randomOutfit.disabled = true
+  try {
+    await Promise.all(stickerLayers.map(id => {
+      const picker = document.getElementById(`twemoji-${id}`)
+      const choices = picker.querySelectorAll('button:not(:disabled)[aria-pressed="false"]')
+      const choice = choices[Math.floor(Math.random() * choices.length)]
+      return choice?.onclick()
+    }))
+  } finally {
+    randomOutfit.disabled = false
+  }
+}
+
+document.querySelector('#profile-back').onclick = () => {
+  profileView.hidden = true
+  cameraView.hidden = false
+  snapshot.focus()
+}
+
+try {
+  const saved = JSON.parse(localStorage.getItem('emoji-profile'))
+  if (saved) {
+    nickname.value = saved.nickname ?? ''
+    bio.value = saved.bio ?? ''
+  }
+} catch {
+  // The page still works when browser storage is unavailable.
+}
+
+const gallery = document.querySelector('#gallery-view')
+const galleryRows = document.querySelector('#gallery-rows')
+const galleryMotion = document.querySelector('#gallery-motion')
+const galleryDetail = document.querySelector('#gallery-detail')
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)')
+let galleryPaused = reduceMotion.matches
+let galleryAnimation
+
+function updateGalleryMotion() {
+  galleryMotion.textContent = galleryPaused ? '继续滚动' : '暂停滚动'
+}
+updateGalleryMotion()
+galleryMotion.onclick = () => {
+  galleryPaused = !galleryPaused
+  updateGalleryMotion()
+}
+
+function showGalleryDetail(entry) {
+  document.querySelector('#gallery-image').src = entry.image
+  document.querySelector('#gallery-name').textContent = entry.nickname
+  document.querySelector('#gallery-bio').textContent = entry.bio || '暂无简介'
+  galleryDetail.showModal()
+}
+
+function displayGallery(entries) {
+  galleryRows.replaceChildren()
+  galleryMotion.hidden = entries.length === 0
+  if (!entries.length) return
+  for (let rowNumber = 0; rowNumber < 3; rowNumber++) {
+    const row = document.createElement('div')
+    row.className = 'gallery-row'
+    const track = document.createElement('div')
+    track.className = 'gallery-track'
+    const items = entries.filter((_, index) => index % 3 === rowNumber)
+    const visibleItems = items.length ? items : [entries[rowNumber % entries.length]]
+    const count = Math.max(visibleItems.length, 7)
+    for (let index = 0; index < count; index++) {
+      const entry = visibleItems[index % visibleItems.length]
+      const button = document.createElement('button')
+      button.className = 'gallery-card'
+      const image = new Image()
+      image.alt = ''
+      image.src = entry.image
+      const name = document.createElement('span')
+      name.textContent = entry.nickname
+      button.append(image, name)
+      button.onclick = () => showGalleryDetail(entry)
+      track.append(button)
+    }
+    row.append(track)
+    galleryRows.append(row)
+  }
+
+  let last = 0
+  const animate = timestamp => {
+    const delta = last ? Math.min(timestamp - last, 50) : 0
+    last = timestamp
+    if (!galleryPaused && !galleryDetail.open) {
+      Array.from(galleryRows.children).forEach((row, index) => {
+        if (row.matches(':hover, :focus-within')) return
+        let position = Number(row.dataset.position ?? row.scrollLeft)
+        const limit = row.scrollWidth - row.clientWidth
+        const direction = Number(row.dataset.direction ?? (index % 2 ? -1 : 1))
+        if (limit <= 0) return
+        position += direction * delta * (0.025 + index * 0.006)
+        if (position <= 0 || position >= limit) row.dataset.direction = String(position <= 0 ? 1 : -1)
+        position = Math.max(0, Math.min(limit, position))
+        row.dataset.position = String(position)
+        row.scrollLeft = position
+      })
+    }
+    galleryAnimation = requestAnimationFrame(animate)
+  }
+  galleryAnimation = requestAnimationFrame(animate)
+}
+
+function openGallery({ focus = true } = {}) {
+  cancelAnimationFrame(galleryAnimation)
+  cameraView.hidden = true
+  profileView.hidden = true
+  gallery.hidden = false
+  stop()
+  if (focus) document.querySelector('#gallery-title').focus()
+  displayGallery([
+    ['1f916', '闪亮机器人', '今天的任务是拍一张好照片。'],
+    ['1f60e', '墨镜巡展员', '镜头已经准备好。'],
+    ['1f43c', '竹子收藏家', '摆个舒服的姿势。'],
+    ['1f929', '星星观察员', '试试随机搭配，看看会抽到什么。'],
+  ].map(([code, nickname, bio]) => ({
+    image: twemojiBase + code + '.svg',
+    nickname,
+    bio,
+  })))
+}
+
+document.querySelector('#camera-back').onclick = () => openGallery()
+document.querySelector('#gallery-take-photo').onclick = () => {
+  cancelAnimationFrame(galleryAnimation)
+  gallery.hidden = true
+  cameraView.hidden = false
+  camera.focus()
+  camera.click()
+}
+
+profileForm.onsubmit = event => {
+  event.preventDefault()
+  const name = nickname.value.trim()
+  const introduction = bio.value.trim()
+  if (!name) {
+    nickname.setCustomValidity('请输入昵称')
+    nickname.reportValidity()
+    return
+  }
+  try {
+    localStorage.setItem('emoji-profile', JSON.stringify({ nickname: name, bio: introduction }))
+  } catch {
+    // The gallery does not depend on local storage.
+  }
+  openGallery()
+}
+profileForm.oninput = () => {
+  nickname.setCustomValidity('')
+  profileStatus.textContent = ''
+}
+
+async function outputPreference(mode, directory) {
+  const database = await new Promise((resolve, reject) => {
+    const request = indexedDB.open('emoji-output', 1)
+    request.onupgradeneeded = () => request.result.createObjectStore('settings')
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction('settings', mode)
+      const store = transaction.objectStore('settings')
+      const request = directory ? store.put(directory, 'directory') : store.get('directory')
+      transaction.oncomplete = () => resolve(request.result)
+      transaction.onabort = () => reject(transaction.error)
+    })
+  } finally {
+    database.close()
+  }
+}
+
+function setOutputDirectory(directory) {
+  outputDirectory = directory
+  outputStatus.textContent = `保存到：${directory.name}`
+  download.textContent = '保存 PNG'
+}
+
+outputPreference('readonly').then(directory => {
+  if (directory && !outputDirectory) setOutputDirectory(directory)
+}).catch(() => {})
+
+chooseOutput.onclick = async () => {
+  if (!window.showDirectoryPicker) {
+    outputStatus.textContent = '当前浏览器不支持选择文件夹，可使用普通下载'
+    return
+  }
+  try {
+    const directory = await window.showDirectoryPicker({ id: 'emoji-output', mode: 'readwrite', startIn: outputDirectory ?? 'documents' })
+    setOutputDirectory(directory)
+    outputPreference('readwrite', directory).catch(() => {
+      outputStatus.textContent = `本次保存到：${directory.name}（浏览器无法记住此文件夹）`
+    })
+  } catch (error) {
+    if (error.name !== 'AbortError') outputStatus.textContent = '无法访问该文件夹，可使用普通下载'
+  }
+}
+
+download.onclick = async event => {
+  if (!outputDirectory || !snapshotBlob) return
+  event.preventDefault()
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const filename = `twemoji-${stamp}-${crypto.randomUUID().slice(0, 8)}.png`
+  try {
+    const directory = outputDirectory
+    if (await directory.requestPermission({ mode: 'readwrite' }) !== 'granted') {
+      outputStatus.textContent = '请允许写入输出文件夹后再保存'
+      return
+    }
+    const file = await directory.getFileHandle(filename, { create: true })
+    const writer = await file.createWritable()
+    await writer.write(snapshotBlob)
+    await writer.close()
+    outputStatus.textContent = `已保存到「${directory.name}」：${filename}`
+  } catch {
+    outputStatus.textContent = '保存失败，请重新选择输出文件夹，或点击「下载 PNG」'
+    outputDirectory = undefined
+    download.textContent = '下载 PNG'
+  }
+}
+
+for (const { id, label, color } of parts) {
+  const row = document.createElement('li')
+  row.innerHTML = `<button type="button" aria-pressed="true"><span class="dot" style="background:${color}"></span>${label}</button><span class="state">待追踪</span>`
+  const button = row.querySelector('button')
+  button.onclick = () => button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'))
+  list.append(row)
+  if (stickers[id]) {
+    const picker = document.createElement('div')
+    picker.className = 'twemoji-picker'
+    picker.id = `twemoji-${id}`
+    picker.setAttribute('popover', 'auto')
+    const replace = document.createElement('button')
+    replace.type = 'button'
+    replace.className = 'replace'
+    replace.textContent = '选表情'
+    replace.setAttribute('aria-label', `选择${label}的 Twemoji`)
+    replace.setAttribute('aria-expanded', 'false')
+    replace.setAttribute('aria-controls', picker.id)
+    replace.setAttribute('popovertarget', picker.id)
+    picker.addEventListener('toggle', () => {
+      replace.setAttribute('aria-expanded', String(picker.matches(':popover-open')))
+    })
+    replace.onclick = () => {
+      if (picker.matches(':popover-open')) return
+      const anchor = replace.getBoundingClientRect()
+      const width = Math.min(228, Math.max(132, anchor.left - 16), window.innerWidth - 16)
+      picker.style.width = `${width}px`
+      picker.style.left = `${Math.max(8, anchor.left - width - 8)}px`
+      picker.style.top = `${Math.max(8, Math.min(anchor.top, window.innerHeight - Math.min(window.innerHeight * 0.52, 360) - 8))}px`
+    }
+    list.closest('.settings-body').addEventListener('scroll', () => picker.hidePopover())
+    list.closest('.settings').addEventListener('toggle', event => {
+      if (!event.currentTarget.open) picker.hidePopover()
+    })
+    window.addEventListener('resize', () => picker.hidePopover())
+    const feedback = document.createElement('span')
+    feedback.className = 'image-feedback'
+    feedback.setAttribute('role', 'status')
+    for (const [index, [code, name]] of stickers[id].options.entries()) {
+      const option = document.createElement('button')
+      option.type = 'button'
+      option.setAttribute('aria-pressed', String(index === 0))
+      const image = new Image()
+      image.crossOrigin = 'anonymous'
+      image.alt = ''
+      image.src = twemojiBase + code + '.svg'
+      if (index === 0) {
+        selectedImages.set(id, image)
+        image.addEventListener('error', () => {
+          if (selectedImages.get(id) === image) feedback.textContent = '默认素材加载失败，请检查网络或选择其他表情'
+        })
+      }
+      option.append(image, name)
+      option.onclick = async () => {
+        for (const choice of picker.querySelectorAll('button')) choice.disabled = true
+        try {
+          await image.decode()
+          selectedImages.set(id, image)
+          for (const choice of picker.querySelectorAll('button')) {
+            choice.setAttribute('aria-pressed', String(choice === option))
+          }
+          feedback.textContent = `当前：${name}`
+          if (picker.matches(':popover-open')) {
+            picker.hidePopover()
+            replace.focus()
+          }
+        } catch {
+          feedback.textContent = '素材加载失败，请检查网络后重试'
+        } finally {
+          for (const choice of picker.querySelectorAll('button')) choice.disabled = false
+        }
+      }
+      picker.append(option)
+    }
+    row.append(replace, picker, feedback)
+  }
+  controls.set(id, { button, state: row.querySelector('.state') })
+}
+
+function setStatus(message) {
+  if (status.textContent !== message) status.textContent = message
+}
+
+function matchHands(bodyParts, hands, width, height) {
+  const candidates = []
+  for (const [id, wristIndex] of [['leftArm', 15], ['rightArm', 16]]) {
+    const wrist = bodyParts[id].points[wristIndex]
+    if (!wrist) continue
+    hands.forEach((hand, index) => {
+      const start = { x: hand[0].x * width, y: hand[0].y * height }
+      const palm = { x: hand[9].x * width, y: hand[9].y * height }
+      const distance = Math.hypot(wrist.x - start.x, wrist.y - start.y)
+      if (distance < Math.min(width, height) * 0.12) candidates.push({ id, index, start, palm, distance })
+    })
+  }
+  const used = new Set()
+  for (const candidate of candidates.sort((a, b) => a.distance - b.distance)) {
+    if (used.has(candidate.index) || bodyParts[candidate.id].hand) continue
+    bodyParts[candidate.id].hand = candidate
+    used.add(candidate.index)
+  }
+}
+
+function measureSticker(id, part) {
+  if (!part) return
+  const points = Object.values(part.points)
+  if (!points.length || !part.segments.length) return
+  const xs = points.map(point => point.x)
+  const ys = points.map(point => point.y)
+  const width = Math.max(...xs) - Math.min(...xs)
+  const height = Math.max(...ys) - Math.min(...ys)
+  let x = Math.min(...xs) + width / 2
+  let y = Math.min(...ys) + height / 2
+  let size = Math.max(width, height)
+  let angle = 0
+  if (id === 'head') {
+    angle = headTilt(part.points)
+  } else if (id === 'torso') {
+    const { 11: leftShoulder, 12: rightShoulder, 23: leftHip, 24: rightHip } = part.points
+    if (leftShoulder && rightShoulder && leftHip && rightHip) {
+      const dx = leftHip.x + rightHip.x - leftShoulder.x - rightShoulder.x
+      const dy = leftHip.y + rightHip.y - leftShoulder.y - rightShoulder.y
+      if (Math.hypot(dx, dy) >= 8) angle = Math.atan2(-dx, dy)
+    }
+  }
+
+  if (id.endsWith('Arm')) {
+    const distalIndices = { leftArm: [13, 15], rightArm: [14, 16] }
+    const [jointIndex, endIndex] = distalIndices[id]
+    const joint = part.points[jointIndex]
+    const end = part.points[endIndex]
+    if (!joint || !end) return
+    const length = Math.hypot(end.x - joint.x, end.y - joint.y)
+    if (length >= 8) angle = Math.atan2(joint.x - end.x, end.y - joint.y)
+    angle += Math.PI
+    x = end.x
+    y = end.y
+    size = Math.max(...part.segments.map(segment => segment.length)) * 0.85
+  } else {
+    size *= id === 'head' ? 2.5 : 1.05
+  }
+
+  if (part.hand) {
+    const { start, palm } = part.hand
+    const dx = palm.x - start.x
+    const dy = palm.y - start.y
+    if (Math.hypot(dx, dy) >= 8) {
+      x = (start.x + palm.x) / 2
+      y = (start.y + palm.y) / 2
+      angle = Math.atan2(dx, -dy)
+      size = Math.hypot(dx, dy) * 2.4
+    }
+  }
+
+  return { x, y, size: Math.max(18, size), angle }
+}
+
+function updateStickerMotion(id, part, time) {
+  const sample = measureSticker(id, part)
+  const previous = stickerMotion.get(id)
+  if (!sample) {
+    if (previous && time - previous.time > 160) stickerMotion.delete(id)
+    return
+  }
+  if (!previous || time - previous.time > 160) {
+    stickerMotion.set(id, { ...sample, time })
+    return
+  }
+  const distance = Math.hypot(sample.x - previous.x, sample.y - previous.y)
+  const jump = distance > Math.max(32, previous.size * 0.8)
+  if (jump && (!previous.pending || time - previous.pending.time > 100 ||
+      Math.hypot(sample.x - previous.pending.x, sample.y - previous.pending.y) > Math.max(24, previous.size * 0.6))) {
+    previous.pending = { x: sample.x, y: sample.y, time }
+    return
+  }
+  const elapsed = time - previous.time
+  const weight = 1 - Math.exp(-elapsed / (distance > previous.size * 0.2 ? 55 : 115))
+  const shapeWeight = 1 - Math.exp(-elapsed / 130)
+  const delta = sample.angle - previous.angle
+  stickerMotion.set(id, {
+    x: previous.x + (sample.x - previous.x) * weight,
+    y: previous.y + (sample.y - previous.y) * weight,
+    size: previous.size + (sample.size - previous.size) * shapeWeight,
+    angle: previous.angle + Math.atan2(Math.sin(delta), Math.cos(delta)) * shapeWeight,
+    time,
+    pending: jump ? { x: sample.x, y: sample.y, time } : undefined,
+  })
+}
+
+function drawSticker(context, id, part, includeArms) {
+  const transform = stickerMotion.get(id)
+  if (!transform) return
+  const { x, y, size, angle } = transform
+  if (includeArms && id.endsWith('Arm') && part?.segments.length) {
+    context.strokeStyle = stickers[id].color
+    context.lineCap = 'round'
+    context.lineWidth = Math.max(12, Math.max(...part.segments.map(segment => segment.length)) * 0.55)
+    for (const { start, end } of part.segments) {
+      context.beginPath()
+      context.moveTo(start.x, start.y)
+      context.lineTo(end.x, end.y)
+      context.stroke()
+    }
+  }
+  context.save()
+  context.translate(x, y)
+  context.rotate(angle)
+  if (mirror.checked !== (id === 'rightArm')) context.scale(-1, 1)
+  const image = selectedImages.get(id)
+  if (image?.complete && image.naturalWidth) {
+    const scale = size / Math.max(image.naturalWidth, image.naturalHeight)
+    const width = image.naturalWidth * scale
+    const height = image.naturalHeight * scale
+    context.drawImage(image, -width / 2, -height / 2, width, height)
+  }
+  context.restore()
+}
+
+function drawEmojiLayers(context, bodyParts, includeArms) {
+  for (const id of stickerLayers) {
+    const part = bodyParts[id]
+    const { button } = controls.get(id)
+    if (button.getAttribute('aria-pressed') === 'true') {
+      drawSticker(context, id, part, includeArms)
+    }
+  }
+}
+
+snapshot.onclick = () => {
+  captureAt = performance.now() + 3000
+  snapshot.disabled = true
+  countdown.textContent = '3 秒后拍摄'
+  guideCountdown.textContent = '3'
+  captureGuide.hidden = false
+}
+
+function updateSnapshot(timestamp, bodyParts, width, height) {
+  if (!captureAt) return
+  if (timestamp < captureAt) {
+    const seconds = Math.ceil((captureAt - timestamp) / 1000)
+    const message = seconds + ' 秒后拍摄'
+    if (guideCountdown.textContent !== String(seconds)) guideCountdown.textContent = seconds
+    if (countdown.textContent !== message) countdown.textContent = message
+    return
+  }
+
+  captureAt = 0
+  captureGuide.hidden = true
+  const output = document.createElement('canvas')
+  output.width = captureRegion.width
+  output.height = captureRegion.height
+  const target = output.getContext('2d')
+  target.fillStyle = '#fff'
+  target.fillRect(0, 0, output.width, output.height)
+  target.translate(-captureRegion.x, -captureRegion.y)
+  if (mirror.checked) {
+    target.translate(canvas.width, 0)
+    target.scale(-1, 1)
+  }
+  fitCameraFrame(target, width, height)
+  drawEmojiLayers(target, bodyParts, false)
+  countdown.textContent = '正在生成快照'
+  output.toBlob(blob => {
+    snapshot.disabled = !stream || !emoji.checked
+    if (!blob) {
+      countdown.textContent = '快照生成失败'
+      return
+    }
+    if (snapshotUrl) URL.revokeObjectURL(snapshotUrl)
+    snapshotBlob = blob
+    snapshotUrl = URL.createObjectURL(blob)
+    preview.src = snapshotUrl
+    download.href = snapshotUrl
+    if (!cameraView.hidden) snapshotDialog.showModal()
+    countdown.textContent = Object.values(bodyParts).some(part => part.segments.length)
+      ? '快照已生成' : '快照已生成，拍摄时未识别到部件'
+  }, 'image/png')
+}
+
+function fitCameraFrame(context, width, height) {
+  const scale = Math.max(canvas.width / width, canvas.height / height)
+  context.translate((canvas.width - width * scale) / 2, (canvas.height - height * scale) / 2)
+  context.scale(scale, scale)
+}
+
+function render(bodyParts, sourceWidth = 0, sourceHeight = 0) {
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.save()
+  try {
+    if (sourceWidth && sourceHeight) {
+      // Center-crop the video and apply the same transform to its landmarks.
+      fitCameraFrame(context, sourceWidth, sourceHeight)
+      context.fillStyle = '#fff'
+      context.fillRect(0, 0, sourceWidth, sourceHeight)
+      context.globalAlpha = 0.28
+      context.drawImage(video, 0, 0, sourceWidth, sourceHeight)
+      context.globalAlpha = 1
+    }
+    for (const { id, color } of parts) {
+      const { button, state } = controls.get(id)
+      const part = bodyParts[id]
+      const label = part?.tracked ? '已追踪' : part?.segments.length ? '部分可见' : '待追踪'
+      if (state.textContent !== label) state.textContent = label
+      if (!part || button.getAttribute('aria-pressed') !== 'true') continue
+      if (emoji.checked) continue
+      context.strokeStyle = color
+      context.fillStyle = color
+      context.lineWidth = Math.max(2, canvas.width / 220)
+      context.lineCap = 'round'
+      for (const { start, end } of part.segments) {
+        context.beginPath()
+        context.moveTo(start.x, start.y)
+        context.lineTo(end.x, end.y)
+        context.stroke()
+      }
+      for (const { x, y } of Object.values(part.points)) {
+        context.beginPath()
+        context.arc(x, y, context.lineWidth, 0, Math.PI * 2)
+        context.fill()
+      }
+    }
+    if (emoji.checked) drawEmojiLayers(context, bodyParts, true)
+  } finally {
+    context.restore()
+  }
+}
+
+async function loadModel() {
+  const base = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21'
+  const { FilesetResolver, PoseLandmarker, HandLandmarker } = await import(base + '/vision_bundle.mjs')
+  const vision = await FilesetResolver.forVisionTasks(base + '/wasm')
+  try {
+    handModel = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+      },
+      runningMode: 'VIDEO',
+      numHands: 2,
+    })
+  } catch (error) {
+    console.warn('Hand tracking unavailable', error)
+  }
+  return PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  })
+}
+
+function stop(message = '摄像头未开启') {
+  stickerMotion.clear()
+  captureAt = 0
+  captureGuide.hidden = true
+  snapshot.disabled = true
+  countdown.textContent = ''
+  cancelAnimationFrame(frame)
+  stream?.getTracks().forEach(track => track.stop())
+  stream = undefined
+  video.srcObject = null
+  placeholder.hidden = false
+  camera.textContent = '开启摄像头'
+  previousTime = -1
+  render({})
+  setStatus(message)
+}
+
+function track(timestamp) {
+  try {
+    if (video.readyState >= 2 && video.currentTime !== previousTime) {
+      previousTime = video.currentTime
+      const { landmarks } = model.detectForVideo(video, timestamp)
+      const bodyParts = getBodyParts(landmarks[0], video.videoWidth, video.videoHeight)
+      let hands = []
+      if (landmarks.length && handModel && emoji.checked) {
+        try {
+          hands = handModel.detectForVideo(video, timestamp).landmarks
+          matchHands(bodyParts, hands, video.videoWidth, video.videoHeight)
+        } catch (error) {
+          console.warn('Hand tracking stopped', error)
+          handModel.close()
+          handModel = undefined
+        }
+      }
+      for (const id of stickerLayers) updateStickerMotion(id, bodyParts[id], timestamp)
+      render(bodyParts, video.videoWidth, video.videoHeight)
+      updateSnapshot(timestamp, bodyParts, video.videoWidth, video.videoHeight)
+      setStatus(landmarks.length ? (bodyParts.leftArm.hand || bodyParts.rightArm.hand ? '正在追踪人体和手掌' : '正在追踪人体') : '未检测到人体，请进入画面')
+    }
+    frame = requestAnimationFrame(track)
+  } catch (error) {
+    console.error(error)
+    stop('追踪中断，请重新开启摄像头')
+  }
+}
+
+camera.onclick = async () => {
+  if (stream) {
+    stop()
+    return
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus('当前浏览器不允许此页面访问摄像头，请尝试用 Chrome 或 Edge 打开')
+    return
+  }
+  camera.disabled = true
+  try {
+    setStatus('等待摄像头授权')
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 16 / 9 }, facingMode: 'user' },
+      audio: false,
+    })
+    if (cameraView.hidden) {
+      stop()
+      return
+    }
+    const activeStream = stream
+    activeStream.getVideoTracks()[0].addEventListener('ended', () => {
+      if (stream === activeStream) stop('摄像头连接已中断')
+    })
+    video.srcObject = stream
+    await video.play()
+    placeholder.hidden = true
+    setStatus('正在加载姿态模型')
+    model ??= await loadModel()
+    if (stream !== activeStream) return
+    camera.textContent = '关闭摄像头'
+    snapshot.disabled = !emoji.checked
+    frame = requestAnimationFrame(track)
+  } catch (error) {
+    console.error(error)
+    const messages = {
+      NotAllowedError: '摄像头权限被拒绝，请检查浏览器的网站权限',
+      NotFoundError: '找不到可用的摄像头',
+      NotReadableError: '摄像头无法读取，请检查是否被其他应用占用',
+    }
+    stop(messages[error.name] ?? '启动失败，请检查网络和摄像头后重试')
+  } finally {
+    camera.disabled = false
+  }
+}
+
+function updateMirror() {
+  stage.classList.toggle('mirror', mirror.checked)
+}
+mirror.addEventListener('change', updateMirror)
+updateMirror()
+emoji.addEventListener('change', () => {
+  if (!emoji.checked && captureAt) {
+    captureAt = 0
+    captureGuide.hidden = true
+    countdown.textContent = '快照已取消'
+  }
+  snapshot.disabled = !stream || camera.disabled || !emoji.checked || Boolean(captureAt)
+})
+window.addEventListener('pagehide', () => stop())
+openGallery({ focus: false })
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
