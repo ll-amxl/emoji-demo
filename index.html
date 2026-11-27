@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Emoji 互动展馆 · 演示版</title>
+<title>Emoji 互动展馆 · GitHub Pages</title>
 <style>
 * { box-sizing: border-box; }
 :root { color-scheme: dark; font: 16px/1.5 system-ui, "Microsoft YaHei", sans-serif; }
@@ -144,15 +144,16 @@ li .replace { padding: 4px 8px; background: #334148; font-size: 14px; }
       <textarea id="profile-bio" name="bio" maxlength="160" rows="4" placeholder="简单介绍一下自己"></textarea>
       <div class="profile-actions">
   <button type="submit" id="profile-save">仅保存资料</button>
+  <button type="submit" id="publish-profile" aria-describedby="profile-publish-note">发布到照片墙</button>
 </div>
-<p id="profile-publish-note">资料仅保存在当前浏览器。<a href="https://emoji-exhibit-online-v1.spiritedkookaburra8.chatgpt.site/">前往完整版投稿</a></p>
+<p id="profile-publish-note">发布后，这张照片、昵称和简介会显示在两个网站的共享照片墙。</p>
       <p id="profile-status" role="status"></p>
     </form>
   </section>
 </main>
 <main id="gallery-view">
-  <header><h1 tabindex="-1" id="gallery-title">示例照片墙</h1><button type="button" id="gallery-take-photo">去拍照</button></header>
-  <p id="gallery-status">试试摄像头换装，再把作品保存为 PNG。<a href="https://emoji-exhibit-online-v1.spiritedkookaburra8.chatgpt.site/">打开完整版</a></p>
+  <header><h1 tabindex="-1" id="gallery-title">照片墙</h1><button type="button" id="gallery-take-photo">去拍照</button></header>
+  <p id="gallery-status" role="status">正在加载照片墙</p><button type="button" id="gallery-retry" hidden>重试加载</button>
   <button type="button" id="gallery-motion" hidden>暂停滚动</button>
   <div id="gallery-rows"></div>
   <dialog id="gallery-detail" aria-labelledby="gallery-name">
@@ -341,13 +342,18 @@ try {
   // The page still works when browser storage is unavailable.
 }
 
+const galleryEndpoint = 'https://emoji-exhibit-online-v1.spiritedkookaburra8.chatgpt.site/api/gallery'
 const gallery = document.querySelector('#gallery-view')
 const galleryRows = document.querySelector('#gallery-rows')
+const galleryStatus = document.querySelector('#gallery-status')
 const galleryMotion = document.querySelector('#gallery-motion')
 const galleryDetail = document.querySelector('#gallery-detail')
+const publishProfile = document.querySelector('#publish-profile')
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)')
 let galleryPaused = reduceMotion.matches
 let galleryAnimation
+let galleryRequest
+const galleryRetry = document.querySelector('#gallery-retry')
 
 function updateGalleryMotion() {
   galleryMotion.textContent = galleryPaused ? '继续滚动' : '暂停滚动'
@@ -417,27 +423,48 @@ function displayGallery(entries) {
   galleryAnimation = requestAnimationFrame(animate)
 }
 
-function openGallery({ focus = true } = {}) {
+async function openGallery({ focus = true } = {}) {
   cancelAnimationFrame(galleryAnimation)
+  galleryRequest?.abort()
   cameraView.hidden = true
   profileView.hidden = true
   gallery.hidden = false
   stop()
   if (focus) document.querySelector('#gallery-title').focus()
-  displayGallery([
-    ['1f916', '闪亮机器人', '今天的任务是拍一张好照片。'],
-    ['1f60e', '墨镜巡展员', '镜头已经准备好。'],
-    ['1f43c', '竹子收藏家', '摆个舒服的姿势。'],
-    ['1f929', '星星观察员', '试试随机搭配，看看会抽到什么。'],
-  ].map(([code, nickname, bio]) => ({
-    image: twemojiBase + code + '.svg',
-    nickname,
-    bio,
-  })))
+  galleryRetry.hidden = true
+  galleryStatus.textContent = '正在加载公共作品'
+  galleryMotion.hidden = true
+  galleryRows.replaceChildren()
+  if (location.protocol === 'file:') {
+    const link = document.createElement('a')
+    link.href = 'https://emoji-exhibit-online-v1.spiritedkookaburra8.chatgpt.site'
+    link.textContent = '打开在线试玩页'
+    galleryStatus.replaceChildren('本地 HTML 无法连接公共图库。', link)
+    return
+  }
+  try {
+    const request = new AbortController()
+    galleryRequest = request
+    const response = await fetch(galleryEndpoint, { signal: request.signal, cache: 'no-store' })
+    if (!response.ok) throw new Error()
+    const entries = (await response.json()).map(entry => ({
+      ...entry,
+      image: new URL(entry.image, galleryEndpoint).href,
+    }))
+    if (gallery.hidden || request !== galleryRequest) return
+    galleryStatus.textContent = entries.length ? '' : '还没有公开作品'
+    displayGallery(entries)
+  } catch (error) {
+    if (error.name === 'AbortError' || gallery.hidden) return
+    galleryStatus.textContent = '照片墙暂时无法加载，你仍可以去拍照。'
+    galleryRetry.hidden = false
+  }
 }
 
+galleryRetry.onclick = () => openGallery({ focus: false })
 document.querySelector('#camera-back').onclick = () => openGallery()
 document.querySelector('#gallery-take-photo').onclick = () => {
+  galleryRequest?.abort()
   cancelAnimationFrame(galleryAnimation)
   gallery.hidden = true
   cameraView.hidden = false
@@ -445,7 +472,13 @@ document.querySelector('#gallery-take-photo').onclick = () => {
   camera.click()
 }
 
-profileForm.onsubmit = event => {
+if (location.protocol === 'file:') {
+  publishProfile.disabled = true
+  publishProfile.hidden = true
+  document.querySelector('#profile-publish-note').textContent = '打开在线试玩页即可发布到照片墙。'
+}
+
+profileForm.onsubmit = async event => {
   event.preventDefault()
   const name = nickname.value.trim()
   const introduction = bio.value.trim()
@@ -459,7 +492,29 @@ profileForm.onsubmit = event => {
   } catch {
     // The gallery does not depend on local storage.
   }
-  openGallery()
+  if (event.submitter === publishProfile) {
+    const saveProfile = document.querySelector('#profile-save')
+    publishProfile.disabled = true
+    saveProfile.disabled = true
+    document.querySelector('#profile-back').disabled = true
+    profileStatus.textContent = '正在发布作品'
+    try {
+      const response = await fetch(galleryEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/png', 'X-Nickname': encodeURIComponent(name), 'X-Bio': encodeURIComponent(introduction) },
+        body: snapshotBlob,
+      })
+      if (!response.ok) throw new Error()
+    } catch {
+      profileStatus.textContent = '发布失败。可以重试，或仅保存资料。'
+      return
+    } finally {
+      publishProfile.disabled = false
+      saveProfile.disabled = false
+      document.querySelector('#profile-back').disabled = false
+    }
+  }
+  await openGallery()
 }
 profileForm.oninput = () => {
   nickname.setCustomValidity('')
